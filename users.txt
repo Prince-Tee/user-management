@@ -1,2 +1,0 @@
-john;developers
-jane;sales,marketing
