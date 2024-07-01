@@ -1,41 +1,74 @@
 #!/bin/bash
 
+# Log file path
 LOG_FILE="/var/log/user_management.log"
 PASSWORD_FILE="/var/secure/user_passwords.csv"
 
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <user-list-file>"
+# Ensure the log directory exists
+mkdir -p /var/log
+mkdir -p /var/secure
+
+# Log function to log actions
+log() {
+    echo "$(date +'%Y-%m-%d %H:%M:%S') - $1" | tee -a $LOG_FILE
+}
+
+# Check if a user list file is provided as an argument
+if [ -z "$1" ]; then
+    log "No user list file provided."
     exit 1
 fi
 
-USER_LIST_FILE=$1
+USER_LIST_FILE="$1"
 
-if [ ! -f "$USER_LIST_FILE" ]; then
-    echo "User list file not found!"
-    exit 1
-fi
-
-sudo mkdir -p /var/secure
-sudo touch $PASSWORD_FILE
-sudo chmod 600 $PASSWORD_FILE
-
+# Read the user list file line by line
 while IFS=";" read -r username groups; do
-    username=$(echo $username | xargs)
-    groups=$(echo $groups | xargs)
+    # Remove leading/trailing whitespace
+    username=$(echo "$username" | xargs)
+    groups=$(echo "$groups" | xargs)
 
-    if id "$username" &>/dev/null; then
-        echo "User $username already exists" | sudo tee -a $LOG_FILE
+    # Skip empty lines
+    if [ -z "$username" ]; then
         continue
     fi
 
-    sudo useradd -m -G $groups -s /bin/bash $username
-    sudo groupadd $username
-    sudo usermod -aG $username $username
-    password=$(openssl rand -base64 12)
-    echo "$username:$password" | sudo tee -a $PASSWORD_FILE
-    echo "$username:$password" | sudo chpasswd
-    echo "User $username created and added to groups $groups" | sudo tee -a $LOG_FILE
+    # Check if the user already exists
+    if id "$username" &>/dev/null; then
+        log "User $username already exists."
+    else
+        # Create the user
+        useradd -m -s /bin/bash "$username"
+        log "User $username created."
 
-done < $USER_LIST_FILE
+        # Generate a random password
+        password=$(openssl rand -base64 12)
+        echo "$username:$password" | tee -a $PASSWORD_FILE
+        echo "$username:$password" | chpasswd
+        log "Password for user $username: $password"
+    fi
 
-echo "User creation completed" | sudo tee -a $LOG_FILE
+    # Create a personal group for the user if it doesn't exist
+    if ! getent group "$username" &>/dev/null; then
+        groupadd "$username"
+        log "Group $username created."
+    fi
+
+    # Add the user to their personal group
+    usermod -aG "$username" "$username"
+
+    # Add the user to additional groups if specified
+    IFS=',' read -r -a group_array <<< "$groups"
+    for group in "${group_array[@]}"; do
+        group=$(echo "$group" | xargs)  # Remove leading/trailing whitespace
+        if ! getent group "$group" &>/dev/null; then
+            groupadd "$group"
+            log "Group $group created."
+        fi
+        usermod -aG "$group" "$username"
+        log "User $username added to group $group."
+    done
+
+done < "$USER_LIST_FILE"
+
+log "User creation completed."
+
