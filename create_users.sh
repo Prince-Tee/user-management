@@ -4,32 +4,39 @@ LOG_FILE="/var/log/user_management.log"
 PASSWORD_FILE="/var/secure/user_passwords.csv"
 
 # Check if the correct number of arguments is provided
-if [ "$#" -ne 1 ]; then echo "Usage: $0 <user-list-file>" exit 1 fi
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <user-list-file>"
+    exit 1
+fi
 
 USER_LIST_FILE=$1
 
 # Check if the user list file exists
-if [ ! -f "$USER_LIST_FILE" ]; then echo "User list file not found!" 
+if [ ! -f "$USER_LIST_FILE" ]; then
+    echo "User list file not found!"
     exit 1
 fi
 
 # Ensure log and password directories exist
-sudo mkdir -p /var/log /var/secure sudo touch $PASSWORD_FILE sudo chmod 
-600 $PASSWORD_FILE
+sudo mkdir -p /var/log /var/secure
+sudo touch $PASSWORD_FILE
+sudo chmod 600 $PASSWORD_FILE
 
 # Read the user list file line by line
-while IFS=";" read -r username groups; do username=$(echo $username | 
-    xargs) groups=$(echo $groups | xargs)
+while IFS=";" read -r username groups; do
+    username=$(echo $username | xargs)
+    groups=$(echo $groups | xargs)
 
     # Check if the user already exists
-    if id "$username" &>/dev/null; then echo "$(date '+%Y-%m-%d 
-        %H:%M:%S') - User $username already exists" | sudo tee -a 
-        $LOG_FILE continue fi
+    if id "$username" &>/dev/null; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - User $username already exists" | sudo tee -a $LOG_FILE
+        continue
+    fi
 
-    # Create user and bash shell
-    sudo useradd -m -s /bin/bash $username if [ $? -eq 0 ]; then echo 
-        "$(date '+%Y-%m-%d %H:%M:%S') - User $username created" | sudo 
-        tee -a $LOG_FILE
+    # Create user with home directory and bash shell
+    sudo useradd -m -s /bin/bash $username
+    if [ $? -eq 0 ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - User $username created" | sudo tee -a $LOG_FILE
     else
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Failed to create user $username" | sudo tee -a $LOG_FILE
         continue
@@ -65,7 +72,7 @@ while IFS=";" read -r username groups; do username=$(echo $username |
         fi
     done
 
-    # Generate password for the user
+    # Generate random password for the user
     password=$(openssl rand -base64 12)
     echo "$username:$password" | sudo chpasswd
     if [ $? -eq 0 ]; then
