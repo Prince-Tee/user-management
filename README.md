@@ -7,5 +7,5 @@ This script creates users and assigns them to specified groups based on a provid
 Run the script with the user list file as an argument:
 
 ```bash
-sudo bash create_users.sh users.txt
+sudo bash create_users.sh <user-list-file>"
 
